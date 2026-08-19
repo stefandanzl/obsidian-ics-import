@@ -1,5 +1,5 @@
 {
-	"name": "PLUGIN_ID",
+	"name": "ics-import",
 	"version": "0.1.0",
 	"description": "PLUGIN_DESCRIPTION",
 	"main": "main.js",
@@ -8,8 +8,13 @@
 		"build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
 		"version": "node version-bump.mjs && git add manifest.json versions.json"
 	},
-	"keywords": [],
-	"author": "AUTHOR_NAME",
+	"keywords": [
+		"ics",
+		"ical",
+		"obsidian",
+		"plugin"
+	],
+	"author": "Stefan Danzl",
 	"license": "MIT",
 	"devDependencies": {
 		"@types/node": "^25.6.2",
