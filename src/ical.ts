@@ -19,11 +19,7 @@ export async function fetchIcsText(url: string): Promise<string> {
  * (00:00–24:00 local time), with RRULE/RDATE occurrences expanded via ical.js.
  * Multi-day events already underway on that day are included.
  */
-export function parseIcsEvents(
-	icsText: string,
-	calendar: CalendarConfig,
-	day: moment.Moment,
-): IcsEvent[] {
+export function parseIcsEvents(icsText: string, calendar: CalendarConfig, day: moment.Moment): IcsEvent[] {
 	const root = new ICAL.Component(ICAL.parse(icsText));
 	registerTimezones(root);
 
@@ -112,7 +108,9 @@ function registerTimezones(root: ICAL.Component): void {
 	for (const vtimezone of root.getAllSubcomponents("vtimezone")) {
 		const tzid = String(vtimezone.getFirstPropertyValue("tzid") ?? "");
 		if (tzid && !ICAL.TimezoneService.has(tzid)) {
-			ICAL.TimezoneService.register(vtimezone as never, tzid);
+			// ical.js 2.x quirk: register(component, name) throws when passed
+			// both arguments — wrap the component in a Timezone ourselves.
+			ICAL.TimezoneService.register(new ICAL.Timezone({ component: vtimezone, tzid }));
 		}
 	}
 }
@@ -122,12 +120,16 @@ function registerTimezones(root: ICAL.Component): void {
  * interpreted as calendar dates in the user's timezone, with the RFC-5545
  * exclusive-end convention (DTEND missing or equal to DTSTART → one full day).
  */
-function toLocalRange(start: ICAL.Time, end: ICAL.Time): {
+function toLocalRange(
+	start: ICAL.Time,
+	end: ICAL.Time,
+): {
 	startMs: number;
 	endMs: number;
 	isAllDay: boolean;
 } {
 	if (start.isDate) {
+		moment();
 		const startMs = moment([start.year, start.month - 1, start.day]).valueOf();
 		const exclusiveEnd =
 			end.isDate && end.compare(start) > 0
