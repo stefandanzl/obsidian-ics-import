@@ -183,6 +183,12 @@ tasks:
       - echo AN{{.AUTHOR_NAME}}
       - printf '\033[35m%s\033[0m\n' "Create .env with 'cp .env-example .env' and enter VAULTS_DIR and VAULT_NAME now"
 
+  patch-obsidian:
+    desc: Patches node_modules/obsidian/obsidian.d.ts to fix moment import
+    cmd: sed -i 's/import \* as Moment from '\''moment'\'';/import Moment from '\''moment'\'';/g' node_modules/obsidian/obsidian.d.ts
+    status: # Only execute if necessary
+      - grep -q "import Moment from 'moment';" node_modules/obsidian/obsidian.d.ts
+
   date:
     desc: Print current date
     silent: true

@@ -2,7 +2,7 @@
 	"id": "ics-import",
 	"name": "ICS Import",
 	"version": "0.1.0",
-	"minAppVersion": "1.12.0",
+	"minAppVersion": "1.13.1",
 	"description": "Fetch, parse, and insert events from remote iCalendar (.ics) feeds directly into your Obsidian notes.",
 	"author": "Stefan Danzl",
 	"authorUrl": "https://github.com/stefandanzl",
