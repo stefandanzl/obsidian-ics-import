@@ -20,7 +20,7 @@ export interface IcsImportSettings {
 }
 
 /** How a template determines the date range it renders. */
-export type TemplateDateMode = "today" | "relative" | "fixed";
+export type TemplateDateMode = "today" | "restOfDay" | "relative" | "fixed";
 
 /** Available sort orders for rendered events. */
 export type TemplateSortMode =
@@ -30,6 +30,9 @@ export type TemplateSortMode =
 	| "durationDesc"
 	| "typeAsc"
 	| "typeDesc";
+
+/** Grouping mode for rendered events; "" = no grouping. */
+export type TemplateGroupMode = "" | "calendar" | "day" | "hour" | "month";
 
 /** A named, reusable event-list output template. */
 export interface OutputTemplate {
@@ -46,10 +49,14 @@ export interface OutputTemplate {
 	fromDate: string;
 	toDate: string;
 	sortMode: TemplateSortMode;
-	/** Group events by calendar with a header between groups. */
-	grouping: boolean;
+	/** Group events under per-group headers; "" disables grouping. */
+	groupBy: TemplateGroupMode;
 	/** Rendered once per group; placeholders from the calendar + {{count}}. */
 	headerTemplate: string;
+	/** Rendered once before all events; placeholder {{count}}. */
+	outputHeaderTemplate: string;
+	/** Rendered once after all events; placeholder {{count}}. */
+	lastLineTemplate: string;
 	/** Rendered once per event; placeholders from the event. */
 	lineTemplate: string;
 	/** Calendar ids to include; undefined/empty = all active calendars. */

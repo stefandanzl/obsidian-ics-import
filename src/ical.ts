@@ -27,7 +27,9 @@ export function parseIcsEvents(icsText: string, calendar: CalendarConfig, day: m
 	const dayStartMs = dayStart.valueOf();
 	const dayEndMs = dayStart.clone().add(1, "day").valueOf();
 
-	const timeFormat = moment.localeData().longDateFormat("LT");
+	// 24h format for {{time}}/{{endTime}}; users wanting locale formats can
+	// use {{date:FORMAT}} placeholders in their templates.
+	const timeFormat = "HH:mm";
 	const events: IcsEvent[] = [];
 
 	const vevents = root.getAllSubcomponents("vevent");

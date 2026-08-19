@@ -1,8 +1,8 @@
-import { Notice, PluginSettingTab, Setting, SettingPage } from "obsidian";
+import { Notice, PluginSettingTab, Setting, SettingGroup, SettingPage } from "obsidian";
 import type { SettingDefinitionItem, SettingGroupItem } from "obsidian";
 import type IcsImportPlugin from "./main";
 import type { CalendarConfig, IcsImportSettings, OutputTemplate } from "./types";
-import type { TemplateDateMode, TemplateSortMode } from "./types";
+import type { TemplateDateMode, TemplateGroupMode, TemplateSortMode } from "./types";
 
 export const DEFAULT_SETTINGS: IcsImportSettings = {
 	calendars: [],
@@ -11,8 +11,24 @@ export const DEFAULT_SETTINGS: IcsImportSettings = {
 
 const DATE_MODE_LABELS: Record<TemplateDateMode, string> = {
 	today: "Today only",
+	restOfDay: "Rest of today",
 	relative: "Relative to today",
 	fixed: "Fixed dates",
+};
+
+const GROUP_MODE_LABELS: Record<TemplateGroupMode, string> = {
+	"": "Disabled",
+	calendar: "Calendar",
+	day: "Day",
+	hour: "Hour",
+	month: "Month",
+};
+
+const DATE_MODE_EXPLAINERS: Record<TemplateDateMode, string> = {
+	today: "All events overlapping today, 00:00–24:00",
+	restOfDay: "Events from now until 24:00 today; events that have already ended are skipped",
+	relative: "Range in day offsets from today — negative values reach into the past, 0 is today",
+	fixed: "Explicit range — each side falls back to today when empty or invalid",
 };
 
 const SORT_MODE_LABELS: Record<TemplateSortMode, string> = {
@@ -142,6 +158,27 @@ abstract class DirtyPage extends SettingPage {
 			this.tab.update();
 		}
 	}
+
+	/** Red destructive action row shared by both sub-pages. */
+	protected addDeleteSetting(name: string, desc: string, deleteAction: () => void): void {
+		new Setting(this.containerEl)
+			.setName(name)
+			.setDesc(desc)
+			.addButton((button) => {
+				button
+					.setButtonText("Delete")
+					.setIcon("trash-2")
+					.setTooltip(name)
+					.onClick(async () => {
+						deleteAction();
+						this.dirty = false;
+						await this.tab.plugin.saveSettings();
+						this.tab.update();
+						this.display();
+					});
+				button.buttonEl.addClass("mod-warning");
+			});
+	}
 }
 
 /**
@@ -166,103 +203,101 @@ class CalendarPage extends DirtyPage {
 		}
 		this.title = calendarLabel(this.calendar);
 
-		new Setting(this.containerEl)
-			.setName("Name")
-			.setDesc("Pretty display name, surfaced to templates as {{icsName}}")
-			.addText((text) =>
-				text
-					.setPlaceholder("e.g. Work")
-					.setValue(this.calendar.name)
-					.onChange((value) => {
-						this.calendar.name = value;
+		const general = new SettingGroup(this.containerEl).setHeading("General");
+		general.addSetting((setting) =>
+			setting
+				.setName("Name")
+				.setDesc("Pretty display name, surfaced to templates as {{icsName}}")
+				.addText((text) =>
+					text
+						.setPlaceholder("e.g. Work")
+						.setValue(this.calendar.name)
+						.onChange((value) => {
+							this.calendar.name = value;
+							void this.save();
+						}),
+				),
+		);
+		general.addSetting((setting) =>
+			setting
+				.setName("ID")
+				.setDesc("Programmatic identifier used to address this calendar in scripts")
+				.addText((text) =>
+					text.setValue(this.calendar.id).onChange((value) => {
+						const invalid =
+							value.trim() === "" ||
+							calendars.some((entry) => entry !== this.calendar && entry.id === value.trim());
+						if (invalid) {
+							new Notice("Calendar IDs must be non-empty and unique");
+						}
+						this.calendar.id = value;
 						void this.save();
 					}),
-			);
+				),
+		);
 
-		new Setting(this.containerEl)
-			.setName("ID")
-			.setDesc("Programmatic identifier used to address this calendar in scripts")
-			.addText((text) =>
-				text.setValue(this.calendar.id).onChange((value) => {
-					const invalid =
-						value.trim() === "" ||
-						calendars.some((entry) => entry !== this.calendar && entry.id === value.trim());
-					if (invalid) {
-						new Notice("Calendar IDs must be non-empty and unique");
-					}
-					this.calendar.id = value;
-					void this.save();
-				}),
-			);
-
-		new Setting(this.containerEl)
-			.setName("iCal URL")
-			.setDesc("Remote .ics feed address (Google/Apple/Outlook secret links work without authentication)")
-			.addText((text) =>
-				text
-					.setPlaceholder("https://example.com/calendar.ics")
-					.setValue(this.calendar.url)
-					.onChange((value) => {
-						this.calendar.url = value;
+		const source = new SettingGroup(this.containerEl).setHeading("Source");
+		source.addSetting((setting) =>
+			setting
+				.setName("iCal URL")
+				.setDesc(
+					"Remote .ics feed address (Google/Apple/Outlook secret links work without authentication)",
+				)
+				.addText((text) =>
+					text
+						.setPlaceholder("https://example.com/calendar.ics")
+						.setValue(this.calendar.url)
+						.onChange((value) => {
+							this.calendar.url = value;
+							void this.save();
+						}),
+				),
+		);
+		source.addSetting((setting) =>
+			setting
+				.setName("Active")
+				.setDesc("Include this calendar when fetching events")
+				.addToggle((toggle) =>
+					toggle.setValue(this.calendar.active).onChange((value) => {
+						this.calendar.active = value;
 						void this.save();
 					}),
-			);
+				),
+		);
 
-		new Setting(this.containerEl)
-			.setName("Emoji")
-			.setDesc("Decorative prefix for this calendar's events ({{emoji}} in templates)")
-			.addText((text) =>
-				text
-					.setPlaceholder("📅")
-					.setValue(this.calendar.emoji ?? "")
-					.onChange((value) => {
-						this.calendar.emoji = value;
-						void this.save();
-					}),
-			);
-
-		new Setting(this.containerEl)
-			.setName("Color")
-			.setDesc("Calendar color ({{color}} in templates)")
-			.addColorPicker((picker) =>
-				picker
-					.setValue(this.calendar.color || "#2962ff")
-					.onChange((value) => {
+		const appearance = new SettingGroup(this.containerEl).setHeading("Appearance");
+		appearance.addSetting((setting) =>
+			setting
+				.setName("Emoji")
+				.setDesc("Decorative prefix for this calendar's events ({{emoji}} in templates)")
+				.addText((text) =>
+					text
+						.setPlaceholder("📅")
+						.setValue(this.calendar.emoji ?? "")
+						.onChange((value) => {
+							this.calendar.emoji = value;
+							void this.save();
+						}),
+				),
+		);
+		appearance.addSetting((setting) =>
+			setting
+				.setName("Color")
+				.setDesc("Calendar color ({{color}} in templates)")
+				.addColorPicker((picker) =>
+					picker.setValue(this.calendar.color || "#2962ff").onChange((value) => {
 						this.calendar.color = value;
 						void this.save();
 					}),
-			);
+				),
+		);
 
-		new Setting(this.containerEl)
-			.setName("Active")
-			.setDesc("Include this calendar when fetching events")
-			.addToggle((toggle) =>
-				toggle.setValue(this.calendar.active).onChange((value) => {
-					this.calendar.active = value;
-					void this.save();
-				}),
-			);
-
-		new Setting(this.containerEl)
-			.setName("Delete this calendar")
-			.setDesc("Remove the calendar and all of its settings")
-			.addButton((button) => {
-				button
-					.setButtonText("Delete")
-					.setIcon("trash-2")
-					.setTooltip("Delete this calendar")
-					.onClick(async () => {
-						const index = calendars.indexOf(this.calendar);
-						if (index !== -1) {
-							calendars.splice(index, 1);
-						}
-						this.dirty = false;
-						await this.tab.plugin.saveSettings();
-						this.tab.update();
-						this.display();
-					});
-				button.buttonEl.addClass("mod-warning");
-			});
+		this.addDeleteSetting("Delete this calendar", "Remove the calendar and all of its settings", () => {
+			const index = calendars.indexOf(this.calendar);
+			if (index !== -1) {
+				calendars.splice(index, 1);
+			}
+		});
 	}
 }
 
@@ -287,154 +322,184 @@ class TemplatePage extends DirtyPage {
 		}
 		this.title = this.template.name || "Untitled template";
 
-		new Setting(this.containerEl)
-			.setName("Name")
-			.setDesc("Pretty display name")
-			.addText((text) =>
-				text
-					.setPlaceholder("e.g. Today's tasks")
-					.setValue(this.template.name)
-					.onChange((value) => {
-						this.template.name = value;
+		const general = new SettingGroup(this.containerEl).setHeading("General");
+		general.addSetting((setting) =>
+			setting
+				.setName("Name")
+				.setDesc("Pretty display name")
+				.addText((text) =>
+					text
+						.setPlaceholder("e.g. Today's tasks")
+						.setValue(this.template.name)
+						.onChange((value) => {
+							this.template.name = value;
+							void this.save();
+						}),
+				),
+		);
+		general.addSetting((setting) =>
+			setting
+				.setName("ID")
+				.setDesc("Programmatic identifier used to call this template")
+				.addText((text) =>
+					text.setValue(this.template.id).onChange((value) => {
+						const invalid =
+							value.trim() === "" ||
+							templates.some((entry) => entry !== this.template && entry.id === value.trim());
+						if (invalid) {
+							new Notice("Template IDs must be non-empty and unique");
+						}
+						this.template.id = value;
 						void this.save();
 					}),
-			);
+				),
+		);
 
-		new Setting(this.containerEl)
-			.setName("ID")
-			.setDesc("Programmatic identifier used to call this template")
-			.addText((text) =>
-				text.setValue(this.template.id).onChange((value) => {
-					const invalid =
-						value.trim() === "" ||
-						templates.some((entry) => entry !== this.template && entry.id === value.trim());
-					if (invalid) {
-						new Notice("Template IDs must be non-empty and unique");
+		const dateRange = new SettingGroup(this.containerEl).setHeading("Date range");
+		dateRange.addSetting((setting) =>
+			setting
+				.setName("Mode")
+				.setDesc("Which days the template covers")
+				.addDropdown((dropdown) => {
+					for (const [mode, label] of Object.entries(DATE_MODE_LABELS)) {
+						dropdown.addOption(mode, label);
 					}
-					this.template.id = value;
-					void this.save();
-				}),
-			);
-
-		new Setting(this.containerEl)
-			.setName("Date range")
-			.setDesc("Which days the template covers; Today only is 00:00–24:00")
-			.addDropdown((dropdown) => {
-				for (const [mode, label] of Object.entries(DATE_MODE_LABELS)) {
-					dropdown.addOption(mode, label);
-				}
-				dropdown
-					.setValue(this.template.dateMode)
-					.onChange((value) => {
+					dropdown.setValue(this.template.dateMode).onChange((value) => {
 						this.template.dateMode = value as TemplateDateMode;
 						void this.save();
 						this.display();
 					});
-			});
-
+				}),
+		);
+		dateRange.addSetting((setting) =>
+			setting.setName("").setDesc(DATE_MODE_EXPLAINERS[this.template.dateMode]),
+		);
 		if (this.template.dateMode === "relative") {
-			this.numberSetting("Start offset", "Days before (-) or after today the range starts", "fromDays");
-			this.numberSetting("End offset", "Days before (-) or after today the range ends", "toDays");
+			this.addNumberSetting(dateRange, "Start offset", "Days before (-) or after today the range starts", "fromDays");
+			this.addNumberSetting(dateRange, "End offset", "Days before (-) or after today the range ends", "toDays");
 		} else if (this.template.dateMode === "fixed") {
-			new Setting(this.containerEl)
-				.setName("Start date")
-				.setDesc("First day of the range (YYYY-MM-DD)")
-				.addText((text) =>
-					text
-						.setPlaceholder("YYYY-MM-DD")
-						.setValue(this.template.fromDate)
-						.onChange((value) => {
-							this.template.fromDate = value;
-							void this.save();
-						}),
-				);
-			new Setting(this.containerEl)
-				.setName("End date")
-				.setDesc("Last day of the range (YYYY-MM-DD)")
-				.addText((text) =>
-					text
-						.setPlaceholder("YYYY-MM-DD")
-						.setValue(this.template.toDate)
-						.onChange((value) => {
-							this.template.toDate = value;
-							void this.save();
-						}),
-				);
+			this.addDateSetting(dateRange, "Start date", "First day of the range (YYYY-MM-DD)", "fromDate");
+			this.addDateSetting(dateRange, "End date", "Last day of the range (YYYY-MM-DD)", "toDate");
 		}
 
-		new Setting(this.containerEl)
-			.setName("Sorting")
-			.setDesc("Order of the rendered events")
-			.addDropdown((dropdown) => {
-				for (const [mode, label] of Object.entries(SORT_MODE_LABELS)) {
-					dropdown.addOption(mode, label);
-				}
-				dropdown
-					.setValue(this.template.sortMode)
-					.onChange((value) => {
+		const sorting = new SettingGroup(this.containerEl).setHeading("Sorting");
+		sorting.addSetting((setting) =>
+			setting
+				.setName("Order")
+				.setDesc("Order of the rendered events")
+				.addDropdown((dropdown) => {
+					for (const [mode, label] of Object.entries(SORT_MODE_LABELS)) {
+						dropdown.addOption(mode, label);
+					}
+					dropdown.setValue(this.template.sortMode).onChange((value) => {
 						this.template.sortMode = value as TemplateSortMode;
 						void this.save();
 					});
-			});
-
-		new Setting(this.containerEl)
-			.setName("Group by calendar")
-			.setDesc("Separate the events of each calendar under their own header")
-			.addToggle((toggle) =>
-				toggle.setValue(this.template.grouping).onChange((value) => {
-					this.template.grouping = value;
-					void this.save();
-					this.display();
 				}),
-			);
+		);
 
-		if (this.template.grouping) {
-			new Setting(this.containerEl)
-				.setName("Group header")
-				.setDesc("Rendered once per calendar; placeholders {{icsName}} {{emoji}} {{color}} {{count}}")
-				.addText((text) =>
-					text
-						.setPlaceholder("### {{emoji}} {{icsName}}")
-						.setValue(this.template.headerTemplate)
-						.onChange((value) => {
-							this.template.headerTemplate = value;
-							void this.save();
-						}),
-				);
+		const grouping = new SettingGroup(this.containerEl).setHeading("Grouping");
+		grouping.addSetting((setting) =>
+			setting
+				.setName("Group by")
+				.setDesc(
+					"Separate the events of each group under their own header; " +
+						"time groups are ordered chronologically",
+				)
+				.addDropdown((dropdown) => {
+					for (const [mode, label] of Object.entries(GROUP_MODE_LABELS)) {
+						dropdown.addOption(mode, label);
+					}
+					dropdown.setValue(this.template.groupBy).onChange((value) => {
+						this.template.groupBy = value as TemplateGroupMode;
+						void this.save();
+						this.display();
+					});
+				}),
+		);
+		if (this.template.groupBy) {
+			grouping.addSetting((setting) =>
+				setting
+					.setName("Group header")
+					.setDesc(
+						"Placeholders {{icsName}} {{emoji}} {{color}} for calendar groups, " +
+							"{{date:FORMAT}} {{count}} for day/hour/month groups. Enter blank lines for extra spacing",
+					)
+					.addTextArea((text) => {
+						text.inputEl.rows = 2;
+						text
+							.setPlaceholder("### {{emoji}} {{icsName}}")
+							.setValue(this.template.headerTemplate ?? "")
+							.onChange((value) => {
+								this.template.headerTemplate = value;
+								void this.save();
+							});
+					}),
+			);
 		}
 
-		new Setting(this.containerEl).setName("Line template").setHeading();
+		const frame = new SettingGroup(this.containerEl).setHeading("Frame");
+		frame.addSetting((setting) =>
+			setting
+				.setName("Header")
+				.setDesc("Rendered once before all events; placeholder {{count}}")
+				.addTextArea((text) => {
+					text.inputEl.rows = 2;
+					text
+						.setPlaceholder("#todo/heute")
+						.setValue(this.template.outputHeaderTemplate ?? "")
+						.onChange((value) => {
+							this.template.outputHeaderTemplate = value;
+							void this.save();
+						});
+				}),
+		);
+		frame.addSetting((setting) =>
+			setting
+				.setName("Last line")
+				.setDesc("Rendered once after all events; placeholder {{count}}. Enter blank lines to end with clean spacing")
+				.addTextArea((text) => {
+					text.inputEl.rows = 2;
+					text
+						.setPlaceholder("")
+						.setValue(this.template.lastLineTemplate ?? "")
+						.onChange((value) => {
+							this.template.lastLineTemplate = value;
+							void this.save();
+						});
+				}),
+		);
 
-		new Setting(this.containerEl).addTextArea((text) => {
-			text.inputEl.rows = 4;
-			text
-				.setPlaceholder("- [ ] {{time}} {{icsName}} {{summary}} {{location}}")
-				.setValue(this.template.lineTemplate)
-				.onChange((value) => {
-					this.template.lineTemplate = value;
-					void this.save();
-				});
-		});
-
-		new Setting(this.containerEl)
-			.setName("Placeholders")
-			.setDesc(
-				"{{time}} {{endTime}} {{icsName}} {{summary}} {{location}} {{description}} " +
-					"{{emoji}} {{color}} {{isAllDay}} {{day}} — rendered once per event; " +
-					"unknown placeholders become empty strings",
-			);
+		const lineTemplate = new SettingGroup(this.containerEl).setHeading("Line template");
+		lineTemplate.addSetting((setting) =>
+			setting.addTextArea((text) => {
+				text.inputEl.rows = 4;
+				text
+					.setPlaceholder("- [ ] {{time}} {{icsName}} {{summary}} {{location}}")
+					.setValue(this.template.lineTemplate)
+					.onChange((value) => {
+						this.template.lineTemplate = value;
+						void this.save();
+					});
+			}),
+		);
+		lineTemplate.addSetting((setting) =>
+			setting.setName("Placeholders").setDesc(
+				"{{time}} {{endTime}} (24h) · {{date:FORMAT}} {{endDate:FORMAT}} with moment.js tokens, " +
+					"e.g. {{date:ddd DD.MM.}} · {{icsName}} {{summary}} {{location}} {{description}} " +
+					"{{emoji}} {{color}} {{isAllDay}} {{day}} — unknown placeholders become empty strings",
+			),
+		);
 
 		const calendars = this.tab.plugin.settings.calendars;
 		if (calendars.length > 0) {
-			new Setting(this.containerEl)
-				.setName("Calendars")
-				.setDesc("Which calendars this template includes")
-				.setHeading();
+			const calendarGroup = new SettingGroup(this.containerEl).setHeading("Calendars");
+			calendarGroup.addSetting((setting) =>
+				setting.setName("").setDesc("Which calendars this template includes"),
+			);
 			for (const calendar of calendars) {
-				new Setting(this.containerEl)
-					.setName(calendarLabel(calendar))
-					.setDesc(calendar.id)
-					.addToggle((toggle) => {
+				calendarGroup.addSetting((setting) =>
+					setting.setName(calendarLabel(calendar)).addToggle((toggle) => {
 						// undefined/empty calendarIds means "all calendars"
 						const ids = this.template.calendarIds;
 						const included = !ids?.length || ids.includes(calendar.id);
@@ -452,57 +517,71 @@ class TemplatePage extends DirtyPage {
 							}
 							void this.save();
 						});
-					});
+					}),
+				);
 			}
 		}
 
-		new Setting(this.containerEl)
-			.setName("Expose as command")
-			.setDesc("Offer a command that inserts the rendered list at the cursor")
-			.addToggle((toggle) =>
-				toggle.setValue(this.template.exposeAsCommand).onChange((value) => {
-					this.template.exposeAsCommand = value;
-					void this.save();
-					this.tab.plugin.syncTemplateCommands();
-				}),
-			);
-
-		new Setting(this.containerEl)
-			.setName("Delete this template")
-			.setDesc("Remove the template and all of its settings")
-			.addButton((button) => {
-				button
-					.setButtonText("Delete")
-					.setIcon("trash-2")
-					.setTooltip("Delete this template")
-					.onClick(async () => {
-						const index = templates.indexOf(this.template);
-						if (index !== -1) {
-							templates.splice(index, 1);
-						}
-						this.dirty = false;
-						await this.tab.plugin.saveSettings();
+		const command = new SettingGroup(this.containerEl).setHeading("Command");
+		command.addSetting((setting) =>
+			setting
+				.setName("Expose as command")
+				.setDesc("Offer a command that inserts the rendered list at the cursor")
+				.addToggle((toggle) =>
+					toggle.setValue(this.template.exposeAsCommand).onChange((value) => {
+						this.template.exposeAsCommand = value;
+						void this.save();
 						this.tab.plugin.syncTemplateCommands();
-						this.tab.update();
-						this.display();
-					});
-				button.buttonEl.addClass("mod-warning");
-			});
+					}),
+				),
+		);
+
+		this.addDeleteSetting("Delete this template", "Remove the template and all of its settings", () => {
+			const index = templates.indexOf(this.template);
+			if (index !== -1) {
+				templates.splice(index, 1);
+			}
+			this.tab.plugin.syncTemplateCommands();
+		});
 	}
 
-	private numberSetting(name: string, desc: string, field: "fromDays" | "toDays"): void {
-		new Setting(this.containerEl)
-			.setName(name)
-			.setDesc(desc)
-			.addText((text) => {
+	private addNumberSetting(
+		group: SettingGroup,
+		name: string,
+		desc: string,
+		field: "fromDays" | "toDays",
+	): void {
+		group.addSetting((setting) =>
+			setting.setName(name).setDesc(desc).addText((text) => {
 				text.inputEl.type = "number";
-				text
-					.setValue(String(this.template[field]))
-					.onChange((value) => {
-						this.template[field] = parseInt(value, 10) || 0;
-						void this.save();
-					});
-			});
+				text.setValue(String(this.template[field])).onChange((value) => {
+					this.template[field] = parseInt(value, 10) || 0;
+					void this.save();
+				});
+			}),
+		);
+	}
+
+	private addDateSetting(
+		group: SettingGroup,
+		name: string,
+		desc: string,
+		field: "fromDate" | "toDate",
+	): void {
+		group.addSetting((setting) =>
+			setting
+				.setName(name)
+				.setDesc(desc)
+				.addText((text) =>
+					text
+						.setPlaceholder("YYYY-MM-DD")
+						.setValue(this.template[field])
+						.onChange((value) => {
+							this.template[field] = value;
+							void this.save();
+						}),
+				),
+		);
 	}
 }
 
@@ -544,8 +623,10 @@ function createTemplate(templates: OutputTemplate[]): OutputTemplate {
 		fromDate: "",
 		toDate: "",
 		sortMode: "dateAsc",
-		grouping: false,
+		groupBy: "",
 		headerTemplate: "### {{emoji}} {{icsName}}",
+		outputHeaderTemplate: "",
+		lastLineTemplate: "",
 		lineTemplate: "- [ ] {{time}} {{icsName}} {{summary}} {{location}}",
 		exposeAsCommand: false,
 	};
