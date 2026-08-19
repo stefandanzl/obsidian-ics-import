@@ -68,6 +68,8 @@ export function parseIcsEvents(icsText: string, calendar: CalendarConfig, day: m
 				id: isRecurring ? `${uid}@${startMoment.format("YYYY-MM-DDTHH:mm")}` : uid,
 				uid,
 				calendarId: calendar.id,
+				emoji: calendar.emoji ?? "",
+				color: calendar.color ?? "",
 				isAllDay: range.isAllDay,
 				isRecurring,
 				endUtime: range.endMs,

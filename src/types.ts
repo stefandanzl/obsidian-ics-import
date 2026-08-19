@@ -8,10 +8,54 @@ export interface CalendarConfig {
 	url: string;
 	/** Whether the calendar is included when events are fetched. */
 	active: boolean;
+	/** Decorative emoji prefix for this calendar's events. */
+	emoji: string;
+	/** Hex color (e.g. "#2962ff"); empty = no color set. */
+	color: string;
 }
 
 export interface IcsImportSettings {
 	calendars: CalendarConfig[];
+	templates: OutputTemplate[];
+}
+
+/** How a template determines the date range it renders. */
+export type TemplateDateMode = "today" | "relative" | "fixed";
+
+/** Available sort orders for rendered events. */
+export type TemplateSortMode =
+	| "dateAsc"
+	| "dateDesc"
+	| "durationAsc"
+	| "durationDesc"
+	| "typeAsc"
+	| "typeDesc";
+
+/** A named, reusable event-list output template. */
+export interface OutputTemplate {
+	/** Programmatic identifier, unique across templates. */
+	id: string;
+	/** Pretty display name. */
+	name: string;
+	/** Date range selection. */
+	dateMode: TemplateDateMode;
+	/** relative: day offsets from today (negative = past); inclusive range. */
+	fromDays: number;
+	toDays: number;
+	/** fixed: explicit dates as YYYY-MM-DD. */
+	fromDate: string;
+	toDate: string;
+	sortMode: TemplateSortMode;
+	/** Group events by calendar with a header between groups. */
+	grouping: boolean;
+	/** Rendered once per group; placeholders from the calendar + {{count}}. */
+	headerTemplate: string;
+	/** Rendered once per event; placeholders from the event. */
+	lineTemplate: string;
+	/** Calendar ids to include; undefined/empty = all active calendars. */
+	calendarIds?: string[];
+	/** Offer an editor command that inserts the rendered list at the cursor. */
+	exposeAsCommand: boolean;
 }
 
 /**
@@ -41,6 +85,10 @@ export interface IcsEvent {
 	id: string;
 	uid: string;
 	calendarId: string;
+	/** Emoji configured on the source calendar. */
+	emoji: string;
+	/** Hex color configured on the source calendar ("" if unset). */
+	color: string;
 	isAllDay: boolean;
 	isRecurring: boolean;
 	/** End of the occurrence, unix milliseconds. */
