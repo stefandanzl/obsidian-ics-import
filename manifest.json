@@ -1,0 +1,11 @@
+{
+	"id": "plugin-template",
+	"name": "Plugin Template",
+	"version": "0.1.0",
+	"minAppVersion": "1.12.0",
+	"description": "A template for creating Obsidian plugins",
+	"author": "Stefan Danzl",
+	"authorUrl": "https://github.com/stefandanzl",
+	"fundingUrl": "",
+	"isDesktopOnly": false
+}
