@@ -207,7 +207,7 @@ class CalendarPage extends DirtyPage {
 		general.addSetting((setting) =>
 			setting
 				.setName("Name")
-				.setDesc("Pretty display name, surfaced to templates as {{icsName}}")
+				.setDesc("Pretty display name, surfaced to templates as {{calendar}}")
 				.addText((text) =>
 					text
 						.setPlaceholder("e.g. Work")
@@ -239,7 +239,7 @@ class CalendarPage extends DirtyPage {
 		const source = new SettingGroup(this.containerEl).setHeading("Source");
 		source.addSetting((setting) =>
 			setting
-				.setName("iCal URL")
+				.setName("iCalendar URL")
 				.setDesc(
 					"Remote .ics feed address (Google/Apple/Outlook secret links work without authentication)",
 				)
@@ -272,7 +272,6 @@ class CalendarPage extends DirtyPage {
 				.setDesc("Decorative prefix for this calendar's events ({{emoji}} in templates)")
 				.addText((text) =>
 					text
-						.setPlaceholder("📅")
 						.setValue(this.calendar.emoji ?? "")
 						.onChange((value) => {
 							this.calendar.emoji = value;
@@ -422,8 +421,8 @@ class TemplatePage extends DirtyPage {
 				setting
 					.setName("Group header")
 					.setDesc(
-						"Placeholders {{icsName}} {{emoji}} {{color}} for calendar groups, " +
-							"{{date:FORMAT}} {{count}} for day/hour/month groups. Enter blank lines for extra spacing",
+						"Placeholders {{calendar}} {{emoji}} {{color}} for calendar groups, " +
+							"{{start:FORMAT}} {{count}} for day/hour/month groups. Enter blank lines for extra spacing",
 					)
 					.addTextArea((text) => {
 						text.inputEl.rows = 2;
@@ -475,7 +474,7 @@ class TemplatePage extends DirtyPage {
 			setting.addTextArea((text) => {
 				text.inputEl.rows = 4;
 				text
-					.setPlaceholder("- [ ] {{time}} {{icsName}} {{summary}} {{location}}")
+					.setPlaceholder("- [ ] {{start}} {{calendar}} {{summary}} {{location}}")
 					.setValue(this.template.lineTemplate)
 					.onChange((value) => {
 						this.template.lineTemplate = value;
@@ -485,9 +484,11 @@ class TemplatePage extends DirtyPage {
 		);
 		lineTemplate.addSetting((setting) =>
 			setting.setName("Placeholders").setDesc(
-				"{{time}} {{endTime}} (24h) · {{date:FORMAT}} {{endDate:FORMAT}} with moment.js tokens, " +
-					"e.g. {{date:ddd DD.MM.}} · {{icsName}} {{summary}} {{location}} {{description}} " +
-					"{{emoji}} {{color}} {{isAllDay}} {{day}} — unknown placeholders become empty strings",
+				"{{start}} {{end}} (24h) · {{duration}} (1h 30m), {{duration:HH:mm}} (clock), " +
+					"{{duration:human}} · {{start:FORMAT}} {{end:FORMAT}} with moment.js tokens, " +
+					"e.g. {{start:ddd DD.MM.}} · {{calendar}} {{summary}} {{location}} {{description}} " +
+					"{{emoji}} {{color}} · {{isAllDay}} renders \"all day\", empty for timed events; " +
+					"{{isAllDay:your text}} renders your text instead — unknown placeholders become empty strings",
 			),
 		);
 
@@ -607,7 +608,7 @@ function createCalendar(calendars: CalendarConfig[]): CalendarConfig {
 		name: `New calendar ${index}`,
 		url: "",
 		active: true,
-		emoji: "",
+		emoji: "📅",
 		color: "",
 	};
 }
@@ -624,10 +625,10 @@ function createTemplate(templates: OutputTemplate[]): OutputTemplate {
 		toDate: "",
 		sortMode: "dateAsc",
 		groupBy: "",
-		headerTemplate: "### {{emoji}} {{icsName}}",
+		headerTemplate: "### {{emoji}} {{calendar}}",
 		outputHeaderTemplate: "",
 		lastLineTemplate: "",
-		lineTemplate: "- [ ] {{time}} {{icsName}} {{summary}} {{location}}",
+		lineTemplate: "- [ ] {{start}} {{calendar}} {{summary}} {{location}}",
 		exposeAsCommand: false,
 	};
 }

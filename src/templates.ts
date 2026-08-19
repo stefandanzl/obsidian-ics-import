@@ -131,7 +131,6 @@ export function renderTemplateOutput(
 				pushGroup(
 					{
 						utime: bucket.startMs,
-						day: moment(bucket.startMs).format("YYYY-MM-DD"),
 						count: bucket.events.length,
 					},
 					bucket.events,
@@ -158,20 +157,85 @@ export function renderTemplateOutput(
 
 /**
  * Replace `{{field}}` placeholders; unknown fields render as empty strings.
- * `{{date:FORMAT}}` / `{{endDate:FORMAT}}` render the occurrence's start/end
- * with any moment.js format tokens (`{{date}}` defaults to YYYY-MM-DD).
+ *
+ * `{{start}}`/`{{end}}` render as HH:mm, or with any moment.js format tokens
+ * via `{{start:FORMAT}}`. `{{duration}}` renders compact ("1h 30m"), or as
+ * `{{duration:HH:mm}}` (clock style, custom tokens) / `{{duration:human}}`
+ * (moment's humanize). `{{calendar}}` is the source calendar's name.
  */
 function renderPlaceholders(template: string, context: object): string {
 	const fields = context as Record<string, unknown>;
-	return template.replace(
-		/\{\{\s*(\w+)(?::([^{}]*))?\s*\}\}/g,
-		(_, key: string, format?: string) => {
-			if (key === "date" || key === "endDate") {
-				const ms = key === "date" ? fields.utime : fields.endUtime;
-				return typeof ms === "number" ? moment(ms).format(format ?? "YYYY-MM-DD") : "";
+	return template.replace(/\{\{\s*(\w+)(?::([^{}]*))?\s*\}\}/g, (_, key: string, format?: string) => {
+		switch (key) {
+			case "start":
+			case "end": {
+				const ms = key === "start" ? fields.utime : fields.endUtime;
+				return typeof ms === "number" ? moment(ms).format(format ?? "HH:mm") : "";
 			}
-			const value = fields[key];
-			return value === undefined || value === null ? "" : String(value);
-		},
-	);
+			case "duration": {
+				if (typeof fields.utime !== "number" || typeof fields.endUtime !== "number") {
+					return "";
+				}
+				return formatDuration(fields.endUtime - fields.utime, format);
+			}
+			case "calendar":
+				return stringify(fields.icsName);
+			case "isAllDay":
+				// Conditional text: the format is the text to show for all-day
+				// events ("all day" by default); timed events render empty.
+				return fields.isAllDay ? format ?? "all day" : "";
+			default:
+				return stringify(fields[key]);
+		}
+	});
+}
+
+function stringify(value: unknown): string {
+	return value === undefined || value === null ? "" : String(value);
+}
+
+/**
+ * Format a duration. Without a format (or "compact"): "2d 3h", "1h 30m",
+ * "45m". "human": moment's humanize(). Otherwise a token format mirroring
+ * the moment-duration-format plugin: D/HH/H/m/mm — HH is total hours unless
+ * D is present (then remainder), mm analogously; repeated tokens zero-pad.
+ */
+function formatDuration(milliseconds: number, format?: string): string {
+	const duration = moment.duration(Math.max(0, milliseconds));
+
+	if (!format || format === "compact") {
+		const days = Math.floor(duration.asDays());
+		const hours = duration.hours();
+		const minutes = duration.minutes();
+		return (
+			[
+				days ? `${days}d` : "",
+				hours ? `${hours}h` : "",
+				minutes ? `${minutes}m` : "",
+			]
+				.filter(Boolean)
+				.join(" ") || "0m"
+		);
+	}
+
+	if (format === "human") {
+		return duration.humanize();
+	}
+
+	const totalDays = Math.floor(duration.asDays());
+	const usesDays = /D/.test(format);
+	const usesHours = /H/.test(format);
+	const days = usesDays ? totalDays : 0;
+	const hours = usesDays ? duration.hours() : Math.floor(duration.asHours());
+	const minutes = usesHours || usesDays ? duration.minutes() : Math.floor(duration.asMinutes());
+
+	return format.replace(/D+|H+|m+/g, (token: string): string => {
+		if (token.startsWith("D")) {
+			return token.length > 1 ? String(days).padStart(token.length, "0") : String(days);
+		}
+		if (token.startsWith("H")) {
+			return token.length > 1 ? String(hours).padStart(token.length, "0") : String(hours);
+		}
+		return token.length > 1 ? String(minutes).padStart(token.length, "0") : String(minutes);
+	});
 }
