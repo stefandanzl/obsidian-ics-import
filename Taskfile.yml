@@ -159,9 +159,10 @@ tasks:
 
   release-create:
     vars:
-      VERSION:
+      VERSION_NEW: # Force reevaluation of stale cached version number
         sh: node -e "console.log(require('./package.json').version)"
-    cmd: gh release create {{.VERSION}} --title "{{.VERSION}}" --notes "New release of the {{.PLUGIN_NAME}} plugin for Obsidian." {{.FILES | join " "}}
+    cmds:
+      - gh release create {{.VERSION_NEW}} --title "{{.VERSION_NEW}}" --notes "New release of the {{.PLUGIN_NAME}} plugin for Obsidian." {{.FILES | join " "}}
 
   release-force:
     desc: "Overwrite an existing release and tag on GitHub"

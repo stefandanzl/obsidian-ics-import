@@ -484,7 +484,7 @@ class TemplatePage extends DirtyPage {
 		);
 		lineTemplate.addSetting((setting) =>
 			setting.setName("Placeholders").setDesc(
-				"{{start}} {{end}} (24h) · {{duration}} (1h 30m), {{duration:HH:mm}} (clock), " +
+				"{{start}} {{end}} (24h, empty for all-day events) · {{duration}} (1h 30m), {{duration:HH:mm}} (clock), " +
 					"{{duration:human}} · {{start:FORMAT}} {{end:FORMAT}} with moment.js tokens, " +
 					"e.g. {{start:ddd DD.MM.}} · {{calendar}} {{summary}} {{location}} {{description}} " +
 					"{{emoji}} {{color}} · {{isAllDay}} renders \"all day\", empty for timed events; " +

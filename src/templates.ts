@@ -170,7 +170,15 @@ function renderPlaceholders(template: string, context: object): string {
 			case "start":
 			case "end": {
 				const ms = key === "start" ? fields.utime : fields.endUtime;
-				return typeof ms === "number" ? moment(ms).format(format ?? "HH:mm") : "";
+				if (typeof ms !== "number") {
+					return "";
+				}
+				// The default 24h time is meaningless (00:00) for all-day
+				// events — render nothing unless an explicit format was given.
+				if (!format && fields.isAllDay === true) {
+					return "";
+				}
+				return moment(ms).format(format ?? "HH:mm");
 			}
 			case "duration": {
 				if (typeof fields.utime !== "number" || typeof fields.endUtime !== "number") {

@@ -111,7 +111,7 @@ Returned event objects carry (legacy names first, extras after): `day`, `utime`,
 
 ### Templater
 
-Daily note drop-in (the reason this plugin exists):
+Daily note drop-in for "ics" plugin (the reason this plugin exists):
 
 ```js
 <%* var events = await app.plugins.getPlugin('ics-import').getEvents(moment(tp.date.now("YYYY-MM-DD"),'YYYY-MM-DD')); events.sort((a,b) => a.utime - b.utime).forEach((e) => { tR+=`\n- [ ] ${e.time} ${e.icsName} ${e.summary} ${e.location? e.location : ''}` }) %>
@@ -120,7 +120,7 @@ Daily note drop-in (the reason this plugin exists):
 Or just render a previously configured template with id `today`:
 
 ```js
-<%* tR += await window.icsImport.renderTemplate('today') %>
+<%* tR += await icsImport.renderTemplate('today') %>
 ```
 
 ## Development
